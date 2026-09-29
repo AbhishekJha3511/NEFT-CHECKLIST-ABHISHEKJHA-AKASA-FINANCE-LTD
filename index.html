@@ -198,6 +198,7 @@
     margin-top:1px;
     display:flex;align-items:center;justify-content:center;
     transition:all .15s;
+    cursor:pointer;
   }
   .checkbox.checked{
     background:var(--green);
@@ -298,6 +299,12 @@
     color:var(--slate);
   }
   .calc-input{width:100%;}
+  .calc-input-fixed{
+    background:#EFEAE0;
+    color:var(--slate);
+    font-weight:600;
+    cursor:not-allowed;
+  }
   .calc-result{
     display:flex;
     justify-content:space-between;
@@ -476,6 +483,34 @@
     align-items:center;
   }
   .upload-btn:hover{background:#F3F0E6;}
+
+  /* Fixed fetch timer */
+  .fetch-timer-widget{
+    position:fixed;
+    top:8px;
+    left:8px;
+    z-index:99999;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    background:#fff;
+    border:1px solid var(--navy);
+    border-radius:7px;
+    box-shadow:0 3px 10px rgba(0,0,0,.16);
+    padding:4px 5px;
+    text-align:center;
+  }
+  .fetch-timer-display{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:var(--navy-deep);line-height:1;padding:2px 3px;min-width:42px;}
+  .fetch-timer-actions{display:flex;gap:3px;justify-content:center;}
+  .fetch-timer-btn{width:24px;height:24px;border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:5px;padding:0;font-size:13px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+  .fetch-timer-btn:hover{background:#F3F0E6;}
+  .fetch-timer-widget.running{border-color:var(--green);}
+  .fetch-timer-widget.warning{border-color:var(--red);}
+  .fetch-timer-widget.expired{border-color:var(--red);}
+  @keyframes fetchTimerBlink{0%,100%{opacity:1;background:#fff}50%{opacity:.18;background:#ffd9d9}}
+  .fetch-timer-widget.blink{animation:fetchTimerBlink .35s ease-in-out 6;}
+  @media(max-width:700px){.fetch-timer-widget{top:6px;left:6px;padding:3px 4px}.fetch-timer-display{font-size:14px}.fetch-timer-btn{width:23px;height:23px;font-size:12px}}
+
   .fetch-status a{color:var(--navy);font-weight:600;}
   .fetch-status{
     font-size:12px;
@@ -584,6 +619,8 @@
     text-decoration-color:#B8C0C9;
   }
   .pending-item-row.excluded .checkbox{background:none;border-color:var(--paper-line);}
+  .pending-item-row.edit-row{cursor:default;}
+  .pending-item-row.edit-row:hover{background:none;}
   .pending-scheme-label{
     display:flex;
     justify-content:space-between;
@@ -842,6 +879,15 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 </script>
 </head>
 <body>
+
+  <div class="fetch-timer-widget" id="fetchTimerWidget" aria-live="polite">
+    <div class="fetch-timer-display" id="fetchTimerDisplay">15:00</div>
+    <div class="fetch-timer-actions">
+      <button type="button" class="fetch-timer-btn" id="fetchTimerResetBtn" title="Reset timer" aria-label="Reset timer">↻</button>
+      <button type="button" class="fetch-timer-btn" id="fetchDataResetBtn" title="Clear fetched data and reset timer" aria-label="Clear fetched data and reset timer">🗑</button>
+    </div>
+  </div>
+
 <div class="wrap">
 
   <div class="masthead">
@@ -853,7 +899,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   <div class="two-col-layout">
   <div class="col-section" id="colSectionOne">
-  <div class="page-section-heading">Mail pendency for documents</div>
+  <div class="page-section-heading">Section 1 — Dealer Communication</div>
 
   <div class="msg-card" id="msgCard">
     <div class="msg-head">Dealer pending-document message</div>
@@ -893,8 +939,6 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     <div class="msg-fields">
       <input type="text" id="cDoNumber" placeholder="D.O. NUMBER" class="msg-input">
       <input type="text" id="cCustomerName" placeholder="CUSTOMER NAME" class="msg-input">
-      <input type="text" id="cSendDate" placeholder="NEFT send date" class="msg-input">
-      <input type="text" id="cEmiDate" placeholder="1st EMI due date" class="msg-input">
       <input type="text" id="cLoanAmt" placeholder="Loan Amount" class="msg-input">
       <input type="text" id="cEmiAmt" placeholder="EMI Amount" class="msg-input">
       <input type="text" id="cTenure" placeholder="Tenure" class="msg-input">
@@ -913,7 +957,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   </div>
   <div class="col-section" id="colSectionTwo">
-  <div class="page-section-heading">File Data &amp; Calculations</div>
+  <div class="page-section-heading">Section 2 — File Data &amp; Calculations</div>
 
   <div class="msg-card" id="fileDataCard">
     <div class="msg-head">📁 File Data — DO Sheet Fetch</div>
@@ -931,9 +975,11 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       <div class="file-row"><span class="file-label">EMI Amount</span><span class="file-value" id="fpEmiAmt">—</span></div>
       <div class="file-row"><span class="file-label">Tenure</span><span class="file-value" id="fpTenure">—</span></div>
       <div class="file-row"><span class="file-label">Advance EMI</span><span class="file-value" id="fpAdvEmi">—</span></div>
-      <div class="file-row"><span class="file-label">Advance Interest Amount</span><span class="file-value" id="fpAdvInterest">—</span></div>
+      <div class="file-row"><span class="file-label">Advance EMI Amount (BX)</span><span class="file-value" id="fpAdvEmiAmount">—</span></div>
+      <div class="file-row"><span class="file-label">Advance Interest Amount (BY)</span><span class="file-value" id="fpAdvInterest">—</span></div>
       <div class="file-row"><span class="file-label">File Charge</span><span class="file-value" id="fpFileCharge">—</span></div>
       <div class="file-row"><span class="file-label">Disbursement Amount</span><span class="file-value" id="fpDisbursed">— (not tracked in DO Sheet; use the calculator below)</span></div>
+      <div class="file-row"><span class="file-label">Registered / Non-Registered</span><span class="file-value" id="fpRegType">—</span></div>
     </div>
 
     <div class="file-page-card">
@@ -1420,7 +1466,7 @@ function colLetterToIndex(letter){
 const DO_SHEET_FIXED_COLS = {
   lead: 'A', do: 'E', area: 'F', name: 'I', surname: 'J',
   mobile: 'R', dealer: 'BI', loan: 'BS', regType: 'BJ',
-  emi: 'BU', tenure: 'BV', advEmi: 'BW',
+  emi: 'BU', tenure: 'BV', advEmi: 'BW', advEmiAmount: 'BX',
   saleExec: 'G', dealerCode: 'BH', vehiclePrice: 'BQ', downPayment: 'BR',
   fileCharge: 'BT', advInterest: 'BY',
   guarantorName: 'Z', guarantorSurname: 'AA', coName: 'AR', coSurname: 'AS'
@@ -1451,6 +1497,7 @@ function mapColumnsToRec(cols, doNumberFallback){
     emi: cleanNumericField(get(DO_SHEET_FIXED_COLS.emi)),
     tenure: cleanNumericField(get(DO_SHEET_FIXED_COLS.tenure)),
     advEmi: cleanNumericField(get(DO_SHEET_FIXED_COLS.advEmi)),
+    advEmiAmount: cleanNumericField(get(DO_SHEET_FIXED_COLS.advEmiAmount)),
     saleExec: String(get(DO_SHEET_FIXED_COLS.saleExec) || '').trim(),
     dealerCode: String(get(DO_SHEET_FIXED_COLS.dealerCode) || '').trim(),
     vehiclePrice: cleanNumericField(get(DO_SHEET_FIXED_COLS.vehiclePrice)),
@@ -1486,6 +1533,7 @@ function extractDoIndexFromWorkbook(wb){
   const idxEmi = resolveIdx(h => h === 'EMI', DO_SHEET_FIXED_COLS.emi);
   const idxTenure = resolveIdx(h => h === 'TENURE', DO_SHEET_FIXED_COLS.tenure);
   const idxAdvEmi = resolveIdx(h => h === 'ADVANCE EMI', DO_SHEET_FIXED_COLS.advEmi);
+  const idxAdvEmiAmount = resolveIdx(h => h.includes('ADVANCE EMI AMOUNT'), DO_SHEET_FIXED_COLS.advEmiAmount);
   const idxSaleExec = resolveIdx(h => h === 'SALE EXECUTIVE', DO_SHEET_FIXED_COLS.saleExec);
   const idxDealerCode = resolveIdx(h => h === 'DEALER CODE', DO_SHEET_FIXED_COLS.dealerCode);
   const idxVehiclePrice = resolveIdx(h => h === 'VEHICLE PRICE', DO_SHEET_FIXED_COLS.vehiclePrice);
@@ -1519,6 +1567,7 @@ function extractDoIndexFromWorkbook(wb){
       emi: idxEmi >= 0 ? cleanNumericField(r[idxEmi]) : '',
       tenure: idxTenure >= 0 ? cleanNumericField(r[idxTenure]) : '',
       advEmi: idxAdvEmi >= 0 ? cleanNumericField(r[idxAdvEmi]) : '',
+      advEmiAmount: idxAdvEmiAmount >= 0 ? cleanNumericField(r[idxAdvEmiAmount]) : '',
       saleExec: idxSaleExec >= 0 ? String(r[idxSaleExec] || '').trim() : '',
       dealerCode: idxDealerCode >= 0 ? String(r[idxDealerCode] || '').trim() : '',
       vehiclePrice: idxVehiclePrice >= 0 ? cleanNumericField(r[idxVehiclePrice]) : '',
@@ -1617,21 +1666,10 @@ function getSavedApiUrl(){
   return APPS_SCRIPT_URL;
 }
 
-function populateAllFieldsFromRec(rec, statusEl){
-  document.getElementById('fCustomer').value = rec.name;
-  document.getElementById('fLead').value = rec.lead;
-  document.getElementById('fDO').value = rec.do;
-  fetchedRegType = rec.regType || '';
-
-  // NEFT Clear — Disbursement Confirmation
-  document.getElementById('cDoNumber').value = rec.do;
-  document.getElementById('cCustomerName').value = rec.name;
-  if (rec.loan) document.getElementById('cLoanAmt').value = rec.loan;
-  if (rec.emi) document.getElementById('cEmiAmt').value = rec.emi;
-  if (rec.tenure) document.getElementById('cTenure').value = rec.tenure;
-  if (rec.advEmi) document.getElementById('cAdvEmi').value = rec.advEmi;
-
-  // File Data — First & Second Page
+function populateFileDataFromRec(rec){
+  // IMPORTANT: File Data is populated FIRST after the live DO Sheet response.
+  // Keep this block independent so downstream calculations/messages always use
+  // the values already loaded into the File Data card.
   document.getElementById('fpDoNumber').textContent = rec.do || '—';
   document.getElementById('fpSaleExec').textContent = rec.saleExec || '—';
   document.getElementById('fpDealerCode').textContent = rec.dealerCode || '—';
@@ -1642,16 +1680,241 @@ function populateAllFieldsFromRec(rec, statusEl){
   document.getElementById('fpEmiAmt').textContent = formatMoney(rec.emi);
   document.getElementById('fpTenure').textContent = rec.tenure || '—';
   document.getElementById('fpAdvEmi').textContent = rec.advEmi || '—';
+  document.getElementById('fpAdvEmiAmount').textContent = formatMoney(
+    rec.advEmiAmount || ((Number(rec.advEmi) || 0) * (Number(rec.emi) || 0))
+  );
   document.getElementById('fpAdvInterest').textContent = formatMoney(rec.advInterest);
   document.getElementById('fpFileCharge').textContent = formatMoney(rec.fileCharge);
+  document.getElementById('fpRegType').textContent = rec.regType || '—';
   document.getElementById('fpCustomerName').textContent = rec.name || '—';
   document.getElementById('fpGuarantorName').textContent = rec.guarantorName || '—';
   document.getElementById('fpCoName').textContent = rec.coName || '—';
+}
 
+function populateAllFieldsFromRec(rec, statusEl){
+  // ============================================================
+  // STEP 1 — FILE DATA FIRST
+  // ============================================================
+  populateFileDataFromRec(rec);
+
+  // ============================================================
+  // STEP 2 — BASIC / NEFT CLEAR FIELDS
+  // ============================================================
+  document.getElementById('fCustomer').value = rec.name;
+  document.getElementById('fLead').value = rec.lead;
+  document.getElementById('fDO').value = rec.do;
+  fetchedRegType = rec.regType || '';
+
+  document.getElementById('cDoNumber').value = rec.do;
+  document.getElementById('cCustomerName').value = rec.name;
+  if (rec.loan) document.getElementById('cLoanAmt').value = rec.loan;
+  if (rec.emi) document.getElementById('cEmiAmt').value = rec.emi;
+  if (rec.tenure) document.getElementById('cTenure').value = rec.tenure;
+  if (rec.advEmi) document.getElementById('cAdvEmi').value = rec.advEmi;
+
+  // ============================================================
+  // STEP 3 — CALCULATOR AFTER FILE DATA IS LOADED
+  // ============================================================
+  applyCalcAutofill(rec);
+
+  // ============================================================
+  // STEP 4 — REMAINING GENERATED SECTIONS / MESSAGES
+  // ============================================================
   renderPendingItemList();
   renderMessage();
   renderClearMessage();
 }
+
+/**
+ * Switches the Disbursement Amount Calculator to the Registered or
+ * Unregistered/High-DP tab based on the fetched Registered/Non-Registered
+ * value (column BJ), then fills in Loan Amount, File Charge, Advance EMI Amount, Advance Interest
+ * and Hold Amount — using real figures from the DO Sheet where available,
+ * falling back to the standard example amounts otherwise.
+ */
+function applyCalcAutofill(rec){
+  const regTypeUpper = (rec.regType || '').toString().toUpperCase();
+  let targetTab = null;
+  if (regTypeUpper.includes('UNREGISTER') || regTypeUpper.includes('NON')) targetTab = 'unregHighDp';
+  else if (regTypeUpper.includes('REGISTER')) targetTab = 'registered';
+  if (!targetTab) return;
+
+  calcState = targetTab;
+  document.querySelectorAll('#calcTabs .subtab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.calc === targetTab);
+  });
+  renderCalcFields();
+
+  const setIfEditable = (fieldId, val) => {
+    const el = document.getElementById('calc_' + fieldId);
+    if (el && !el.readOnly && val !== undefined && val !== '' && val !== null && !isNaN(Number(val))) {
+      el.value = val;
+    }
+  };
+
+  if (targetTab === 'registered'){
+    setIfEditable('loan', rec.loan || 85000);
+    setIfEditable('filecharge', rec.fileCharge || 5900);
+    setIfEditable('hold15k', 15000);
+  } else if (targetTab === 'unregHighDp'){
+    setIfEditable('loan', rec.loan || 95000);
+    setIfEditable('filecharge', rec.fileCharge || 5900);
+    setIfEditable('advemi', rec.advEmiAmount || ((Number(rec.advEmi) || 0) * (Number(rec.emi) || 0)));
+    setIfEditable('interest', rec.advInterest || 0);
+  }
+  computeCalc();
+}
+
+
+// ============================================================
+// FIXED 15-MINUTE FETCH TIMER + FRONTEND RESET
+// Starts ONLY when the Fetch button is clicked.
+// At 10:00 elapsed, the timer background blinks 3 times.
+// At 15:00 elapsed, the timer stops automatically.
+// ============================================================
+const FETCH_TIMER_TOTAL = 15 * 60;
+let fetchTimerInterval = null;
+let fetchTimerStartedAt = null;
+let fetchTimerBlinkTriggered = false;
+
+function updateFetchTimerDisplay(secondsLeft){
+  const display = document.getElementById('fetchTimerDisplay');
+  const widget = document.getElementById('fetchTimerWidget');
+  if (!display || !widget) return;
+  const mins = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
+  display.textContent = String(mins).padStart(2,'0') + ':' + String(secs).padStart(2,'0');
+  widget.classList.toggle('running', !!fetchTimerInterval);
+  widget.classList.toggle('warning', secondsLeft <= 300 && secondsLeft > 0);
+  widget.classList.toggle('expired', secondsLeft <= 0);
+}
+
+function triggerFetchTimerBlink(){
+  const widget = document.getElementById('fetchTimerWidget');
+  if (!widget) return;
+  widget.classList.remove('blink');
+  void widget.offsetWidth;
+  widget.classList.add('blink');
+  setTimeout(() => widget.classList.remove('blink'), 2300);
+}
+
+function stopFetchTimer(){
+  if (fetchTimerInterval) {
+    clearInterval(fetchTimerInterval);
+    fetchTimerInterval = null;
+  }
+  const widget = document.getElementById('fetchTimerWidget');
+  if (widget) widget.classList.remove('running');
+}
+
+function startFetchTimer(){
+  stopFetchTimer();
+  fetchTimerStartedAt = Date.now();
+  fetchTimerBlinkTriggered = false;
+  updateFetchTimerDisplay(FETCH_TIMER_TOTAL);
+  fetchTimerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - fetchTimerStartedAt) / 1000);
+    const remaining = Math.max(0, FETCH_TIMER_TOTAL - elapsed);
+
+    updateFetchTimerDisplay(remaining);
+
+    if (elapsed >= 600 && !fetchTimerBlinkTriggered){
+      fetchTimerBlinkTriggered = true;
+      triggerFetchTimerBlink();
+    }
+
+    if (elapsed >= FETCH_TIMER_TOTAL){
+      stopFetchTimer();
+      updateFetchTimerDisplay(0);
+    }
+  }, 250);
+}
+
+function resetFetchTimer(){
+  stopFetchTimer();
+  fetchTimerStartedAt = null;
+  fetchTimerBlinkTriggered = false;
+  const widget = document.getElementById('fetchTimerWidget');
+  if (widget) widget.classList.remove('warning','expired','blink');
+  updateFetchTimerDisplay(FETCH_TIMER_TOTAL);
+}
+
+function clearFetchedFrontendData(){
+  // ============================================================
+  // CLEAR ONLY DATA POPULATED FROM THE LIVE GOOGLE SHEET FETCH.
+  // DO NOT MODIFY embedded/uploaded DO Sheet data (doSheetIndex),
+  // HTML-stored values, or the user's D.O. input.
+  // The timer is independent and is NOT reset by this button.
+  // ============================================================
+
+  // Live-fetch fields used outside the File Data card
+  [
+    'fCustomer','fLead','fDO','cDoNumber','cCustomerName','cLoanAmt',
+    'cEmiAmt','cTenure','cAdvEmi','cDisbursed','cHoldAmt',
+    'cDealerAcc','cDealerIfsc'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  // Keep the normal NEFT Clear defaults after removing fetched values.
+  const adv = document.getElementById('cAdvEmi');
+  const hold = document.getElementById('cHoldAmt');
+  if (adv) adv.value = '0';
+  if (hold) hold.value = '0';
+
+  // Clear ONLY the visible File Data values populated by the latest fetch.
+  [
+    'fpDoNumber','fpSaleExec','fpDealerCode','fpDealerName','fpVehiclePrice',
+    'fpDownPayment','fpLoanAmt','fpEmiAmt','fpTenure','fpAdvEmi',
+    'fpAdvEmiAmount','fpAdvInterest','fpFileCharge','fpRegType',
+    'fpCustomerName','fpGuarantorName','fpCoName'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+
+  const fpDisbursed = document.getElementById('fpDisbursed');
+  if (fpDisbursed) {
+    fpDisbursed.textContent =
+      '— (not tracked in DO Sheet; use the calculator below)';
+  }
+
+  // Clear generated output based on the fetched record only.
+  ['pendingItemList','msgPreview','clearPreview'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
+
+  const msgStatus = document.getElementById('msgStatus');
+  if (msgStatus) msgStatus.textContent = '';
+
+  const clearStatus = document.getElementById('clearStatus');
+  if (clearStatus) clearStatus.textContent = '0 / 7 key fields filled.';
+
+  // Clear only the current live-fetch registration type.
+  fetchedRegType = '';
+
+  // Restore calculator UI defaults without touching the embedded DO Sheet.
+  calcState = 'registered';
+  document.querySelectorAll('#calcTabs .subtab').forEach(t => {
+    t.classList.toggle('active', t.dataset.calc === 'registered');
+  });
+  renderCalcFields();
+
+  // IMPORTANT:
+  // - doSheetIndex is intentionally preserved.
+  // - msgDoNumberInput is intentionally preserved.
+  // - HTML-stored/embedded data is intentionally preserved.
+  // - Timer is intentionally preserved.
+  const statusEl = document.getElementById('msgFetchStatus');
+  if (statusEl) {
+    statusEl.textContent = 'Fetched Google Sheet data cleared. Ready for next fetch.';
+  }
+}
+
+document.getElementById('fetchTimerResetBtn').addEventListener('click', resetFetchTimer);
+document.getElementById('fetchDataResetBtn').addEventListener('click', clearFetchedFrontendData);
 
 document.getElementById('msgFetchDoBtn').addEventListener('click', async function(){
   const statusEl = document.getElementById('msgFetchStatus');
@@ -1660,6 +1923,9 @@ document.getElementById('msgFetchDoBtn').addEventListener('click', async functio
     statusEl.textContent = 'Enter a D.O. number to fetch.';
     return;
   }
+
+  // Timer starts only after the user clicks Fetch with a D.O. number.
+  startFetchTimer();
 
   const apiUrl = getSavedApiUrl();
   if (apiUrl){
@@ -1766,6 +2032,11 @@ const PENDING_MSG_TEMPLATES = {
 let msgExcluded = { erickshaw: {}, battery: {}, twowheeler: {} };
 // Per-scheme, user-added custom checklist items: [{ text, included }]
 let msgExtraItems = { erickshaw: [], battery: [], twowheeler: [] };
+// Per-scheme, editable working copies of the standard template item text
+let workingPendingItems = {};
+Object.keys(PENDING_MSG_TEMPLATES).forEach(k=>{
+  workingPendingItems[k] = PENDING_MSG_TEMPLATES[k].items.slice();
+});
 
 function currentPendingTemplate(){
   const key = PENDING_MSG_TEMPLATES[pendingScheme] ? pendingScheme : 'erickshaw';
@@ -1781,7 +2052,7 @@ function renderPendingItemList(){
   const label = document.createElement('div');
   label.className = 'pending-scheme-label';
   const leftText = document.createElement('span');
-  leftText.textContent = schemeMeta[key].label + ' — standard pending list (click to remove an item that doesn\'t apply)';
+  leftText.textContent = schemeMeta[key].label + ' — standard pending list (edit text, or untick an item that doesn\'t apply)';
   label.appendChild(leftText);
   if (key === 'erickshaw' && fetchedRegType){
     const rightText = document.createElement('span');
@@ -1790,22 +2061,27 @@ function renderPendingItemList(){
     label.appendChild(rightText);
   }
   container.appendChild(label);
-  tpl.items.forEach((item, i)=>{
+  workingPendingItems[key].forEach((item, i)=>{
     const excluded = !!msgExcluded[key][i];
     const row = document.createElement('div');
-    row.className = 'pending-item-row' + (excluded ? ' excluded' : '');
+    row.className = 'pending-item-row edit-row' + (excluded ? ' excluded' : '');
     const box = document.createElement('div');
     box.className = 'checkbox' + (excluded ? '' : ' checked');
-    const text = document.createElement('div');
-    text.className = 'item-label';
-    text.textContent = item;
-    row.appendChild(box);
-    row.appendChild(text);
-    row.addEventListener('click', ()=>{
+    box.addEventListener('click', ()=>{
       msgExcluded[key][i] = !msgExcluded[key][i];
       renderPendingItemList();
       renderMessage();
     });
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'item-edit-input';
+    input.value = item;
+    input.addEventListener('input', ()=>{
+      workingPendingItems[key][i] = input.value;
+      renderMessage();
+    });
+    row.appendChild(box);
+    row.appendChild(input);
     container.appendChild(row);
   });
 
@@ -1824,6 +2100,7 @@ function renderPendingItemList(){
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'item-edit-input';
+    input.placeholder = 'Type a custom requirement…';
     input.value = extra.text;
     input.addEventListener('input', ()=>{
       extra.text = input.value;
@@ -1854,7 +2131,7 @@ function renderPendingItemList(){
   addBtn.className = 'add-item-btn';
   addBtn.textContent = '+ Add checklist item';
   addBtn.addEventListener('click', ()=>{
-    msgExtraItems[key].push({ text: 'New requirement', included: true });
+    msgExtraItems[key].push({ text: '', included: true });
     renderPendingItemList();
     renderMessage();
     setTimeout(()=>{
@@ -1863,20 +2140,29 @@ function renderPendingItemList(){
       if (last){ last.focus(); last.select(); }
     }, 0);
   });
+  const restoreBtn = document.createElement('button');
+  restoreBtn.className = 'restore-default-link';
+  restoreBtn.textContent = 'Restore default wording for this scheme';
+  restoreBtn.addEventListener('click', ()=>{
+    workingPendingItems[key] = PENDING_MSG_TEMPLATES[key].items.slice();
+    msgExcluded[key] = {};
+    renderPendingItemList();
+    renderMessage();
+  });
   addRow.appendChild(spacer);
   addRow.appendChild(addBtn);
+  addRow.appendChild(restoreBtn);
   container.appendChild(addRow);
 }
 
 function renderMessage(){
-  renderPendingItemList();
   const { key, tpl } = currentPendingTemplate();
   const customer = document.getElementById('fCustomer').value.trim();
   const lead = document.getElementById('fLead').value.trim();
   const doNo = document.getElementById('fDO').value.trim();
   const checker = document.getElementById('fChecker').value.trim();
 
-  const activeItems = tpl.items.filter((_, i) => !msgExcluded[key][i]);
+  const activeItems = workingPendingItems[key].filter((_, i) => !msgExcluded[key][i]);
   const activeExtras = msgExtraItems[key].filter(e => e.included && e.text.trim());
   const pendingLines = activeItems.map(item => tpl.bullet + ' ' + item)
     .concat(activeExtras.map(e => tpl.bullet + ' ' + e.text.trim()))
@@ -1902,7 +2188,7 @@ ${tpl.footerLine}`;
   document.getElementById('msgPreview').textContent = message;
 
   const statusEl = document.getElementById('msgStatus');
-  const totalCount = tpl.items.length + msgExtraItems[key].length;
+  const totalCount = workingPendingItems[key].length + msgExtraItems[key].length;
   const includedCount = activeItems.length + activeExtras.length;
   statusEl.textContent = includedCount + ' of ' + totalCount + ' items included in the message.';
   statusEl.classList.toggle('pending', includedCount < totalCount);
@@ -1949,16 +2235,70 @@ document.getElementById('copyBtn').addEventListener('click', async ()=>{
 });
 
 // ---------- NEFT CLEAR — DISBURSEMENT CONFIRMATION MESSAGE ----------
-const CLEAR_FIELD_IDS = ['cDoNumber','cCustomerName','cSendDate','cEmiDate','cLoanAmt','cEmiAmt','cTenure','cAdvEmi','cDisbursed','cHoldAmt','cDealerAcc','cDealerIfsc'];
+const CLEAR_FIELD_IDS = ['cDoNumber','cCustomerName','cLoanAmt','cEmiAmt','cTenure','cAdvEmi','cDisbursed','cHoldAmt','cDealerAcc','cDealerIfsc'];
 
 
 
-function renderClearMessage(){
+function formatDate(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  return `${day}-${month}-${year}`;
+}
+
+function calculateSendDate() {
+  const today = new Date();
+
+  // Start with 4 days from today
+  const sendDate = new Date(today);
+  sendDate.setDate(today.getDate() + 4);
+
+  // If Sunday falls within the 4-day period,
+  // move the date to 5 days from today
+  for (let i = 1; i <= 4; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(today.getDate() + i);
+
+    if (checkDate.getDay() === 0) {
+      sendDate.setDate(today.getDate() + 5);
+      break;
+    }
+  }
+
+  return sendDate;
+}
+
+function calculateEmiDate(date) {
+  const day = date.getDate();
+  // Set day to 1 first to avoid month overflow (e.g. 31st + 1 month).
+  const emiDate = new Date(date.getFullYear(), date.getMonth(), 1);
+
+  if (day <= 15) {
+    // 1st–15th → next month's 5th
+    emiDate.setMonth(emiDate.getMonth() + 1, 5);
+  } else {
+    // 16th–end → month after next month's 5th
+    emiDate.setMonth(emiDate.getMonth() + 2, 5);
+  }
+
+  return emiDate;
+}
+
+function renderClearMessage() {
   const v = id => document.getElementById(id).value.trim();
+
   const doNumber = v('cDoNumber');
   const customerName = v('cCustomerName');
-  const sendDate = v('cSendDate');
-  const emiDate = v('cEmiDate');
+
+  // Automatically calculate NEFT send date
+  const sendDateObj = calculateSendDate();
+  const sendDate = formatDate(sendDateObj);
+
+  // Automatically calculate 1st EMI date
+  const emiDateObj = calculateEmiDate(sendDateObj);
+  const emiDate = formatDate(emiDateObj);
+
   const loanAmt = v('cLoanAmt');
   const emiAmt = v('cEmiAmt');
   const tenure = v('cTenure');
@@ -1991,39 +2331,61 @@ CLEARED BY :- ${checkerName}`;
 
   document.getElementById('clearPreview').textContent = message;
 
-  const filled = [doNumber, customerName, sendDate, emiDate, loanAmt, emiAmt, disbursed, dealerAcc, dealerIfsc].filter(Boolean).length;
-  document.getElementById('clearStatus').textContent = filled + ' / 9 key fields filled.';
+  const filled = [
+    doNumber,
+    customerName,
+    loanAmt,
+    emiAmt,
+    disbursed,
+    dealerAcc,
+    dealerIfsc
+  ].filter(Boolean).length;
+
+  document.getElementById('clearStatus').textContent =
+    filled + ' / 7 key fields filled.';
+
   return message;
 }
 
-CLEAR_FIELD_IDS.forEach(id=>{
+CLEAR_FIELD_IDS.forEach(id => {
   document.getElementById(id).addEventListener('input', renderClearMessage);
 });
 
-document.getElementById('clearCopyBtn').addEventListener('click', async ()=>{
+document.getElementById('clearCopyBtn').addEventListener('click', async () => {
   const message = renderClearMessage();
   const btn = document.getElementById('clearCopyBtn');
-  try{
+
+  try {
     await navigator.clipboard.writeText(message);
-  }catch(e){
+  } catch (e) {
     const ta = document.createElement('textarea');
+
     ta.value = message;
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
+
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    try { document.execCommand('copy'); } catch(err) {}
+
+    try {
+      document.execCommand('copy');
+    } catch (err) {}
+
     document.body.removeChild(ta);
   }
+
   const original = btn.textContent;
+
   btn.textContent = '✅ Copied!';
   btn.classList.add('copied');
-  setTimeout(()=>{
+
+  setTimeout(() => {
     btn.textContent = original;
     btn.classList.remove('copied');
   }, 1500);
 });
+
 renderClearMessage();
 
 function wireToggle(toggleId, panelId, showText, hideText){
@@ -2070,42 +2432,42 @@ const calcDefs = {
     fields: [
       { id:'loan', label:'Loan Amount' },
       { id:'filecharge', label:'File Charge' },
-      { id:'lifeins', label:'Life Insurance' }
+      { id:'lifeins', label:'Life Insurance', fixed:600 }
     ],
     compute: v => v.loan - v.filecharge - v.lifeins,
-    note: 'Disbursement = Loan Amount − File Charge − Life Insurance'
+    note: 'Disbursement = Loan Amount − File Charge − Life Insurance (fixed ₹600)'
   },
   twowheeler: {
     fields: [
       { id:'loan', label:'Loan Amount' },
       { id:'filecharge', label:'File Charge' },
-      { id:'lifeins', label:'Life Insurance' }
+      { id:'lifeins', label:'Life Insurance', fixed:600 }
     ],
     compute: v => v.loan - v.filecharge - v.lifeins,
-    note: 'Disbursement = Loan Amount − File Charge − Life Insurance'
+    note: 'Disbursement = Loan Amount − File Charge − Life Insurance (fixed ₹600)'
   },
   unregHighDp: {
     fields: [
       { id:'loan', label:'Loan Amount' },
       { id:'filecharge', label:'File Charge' },
-      { id:'advemi', label:'Advance EMI' },
-      { id:'interest', label:'Interest Amount' },
-      { id:'lifeins', label:'Life Insurance' }
+      { id:'advemi', label:'Advance EMI Amount (BX)' },
+      { id:'interest', label:'Advance Interest Amount (BY)' },
+      { id:'lifeins', label:'Life Insurance', fixed:600 }
     ],
     compute: v => v.loan - v.filecharge - v.advemi - v.interest - v.lifeins,
-    note: 'Disbursement = Loan Amount − File Charge − Advance EMI − Interest Amount − Life Insurance'
+    note: 'Disbursement = Loan Amount − File Charge − Advance EMI Amount (BX) − Advance Interest Amount (BY) − Life Insurance (₹600)'
   },
   registered: {
     fields: [
       { id:'loan', label:'Loan Amount' },
       { id:'filecharge', label:'File Charge' },
-      { id:'lifeins', label:'Life Insurance' },
+      { id:'lifeins', label:'Life Insurance', fixed:600 },
       { id:'hold15k', label:'Hold Amount (₹15,000)' },
       { id:'vehicleinspremium', label:'Vehicle Insurance Premium' },
       { id:'vehicleab', label:'Vehicle A+B Amount' }
     ],
     compute: v => v.loan - v.filecharge - v.lifeins - v.hold15k - v.vehicleinspremium + (v.vehicleab * 0.4),
-    note: 'Disbursement = Loan Amount − File Charge − Life Insurance − Hold (₹15,000) − Vehicle Insurance Premium + (Vehicle A+B × 40%)'
+    note: 'Disbursement = Loan Amount − File Charge − Life Insurance (fixed ₹600) − Hold (₹15,000) − Vehicle Insurance Premium + (Vehicle A+B × 40%)'
   }
 };
 let calcState = 'registered';
@@ -2120,12 +2482,16 @@ function renderCalcFields(){
     const wrap = document.createElement('div');
     wrap.className = 'calc-field';
     const label = document.createElement('label');
-    label.textContent = f.label;
+    label.textContent = f.label + (f.fixed !== undefined ? ' (fixed)' : '');
     const input = document.createElement('input');
     input.type = 'number';
-    input.className = 'msg-input calc-input';
+    input.className = 'msg-input calc-input' + (f.fixed !== undefined ? ' calc-input-fixed' : '');
     input.id = 'calc_' + f.id;
     input.placeholder = '0';
+    if (f.fixed !== undefined){
+      input.value = f.fixed;
+      input.readOnly = true;
+    }
     input.addEventListener('input', computeCalc);
     wrap.appendChild(label);
     wrap.appendChild(input);
