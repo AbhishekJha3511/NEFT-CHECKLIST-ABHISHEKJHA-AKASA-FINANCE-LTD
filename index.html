@@ -1886,14 +1886,27 @@ function clearFetchedFrontendData(){
     if (el) el.textContent = '';
   });
 
+  // RESTORE THE DEFAULT DEALER PENDING-DOCUMENT CHECKLIST.
+  // Clear any edited wording, unticked items, and custom checklist items
+  // so the selected scheme starts again from its original template.
+  Object.keys(PENDING_MSG_TEMPLATES).forEach(key => {
+    workingPendingItems[key] = PENDING_MSG_TEMPLATES[key].items.slice();
+    msgExcluded[key] = {};
+    msgExtraItems[key] = [];
+  });
+
+  // Clear only the current live-fetch registration type before rendering.
+  fetchedRegType = '';
+
+  // Rebuild the checklist immediately after Clear Fetch Data.
+  renderPendingItemList();
+  renderMessage();
+
   const msgStatus = document.getElementById('msgStatus');
   if (msgStatus) msgStatus.textContent = '';
 
   const clearStatus = document.getElementById('clearStatus');
   if (clearStatus) clearStatus.textContent = '0 / 7 key fields filled.';
-
-  // Clear only the current live-fetch registration type.
-  fetchedRegType = '';
 
   // Restore calculator UI defaults without touching the embedded DO Sheet.
   calcState = 'registered';
