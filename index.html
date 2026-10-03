@@ -2001,7 +2001,7 @@ document.getElementById('msgFetchDoBtn').addEventListener('click', async functio
 function formatMoney(v){
   if (!v) return '—';
   const n = Number(v);
-  return isNaN(n) ? v : '₹' + n.toLocaleString('en-IN');
+  return isNaN(n) ? v : '₹' + String(Math.trunc(n));
 }
 
 // ---------- FIXED PENDING-DOCUMENT MESSAGE TEMPLATES ----------
@@ -2311,6 +2311,30 @@ document.getElementById('copyBtn').addEventListener('click', async ()=>{
   }, 1500);
 });
 
+// ---------- DISPLAY NUMBER FORMAT: NO COMMAS ----------
+// Remove thousands separators from displayed numeric values across the app.
+function removeNumberCommasFromPage(root = document.body) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || /^(SCRIPT|STYLE|TEXTAREA)$/i.test(parent.tagName)) continue;
+    if (/\d,\d/.test(node.nodeValue)) nodes.push(node);
+  }
+  nodes.forEach(n => {
+    n.nodeValue = n.nodeValue.replace(/(?<=\d),(?=\d)/g, '');
+  });
+}
+
+function removeInputNumberCommas() {
+  document.querySelectorAll('input, textarea').forEach(el => {
+    if (typeof el.value === 'string' && /\d,\d/.test(el.value)) {
+      el.value = el.value.replace(/(?<=\d),(?=\d)/g, '');
+    }
+  });
+}
+
 // ---------- NEFT CLEAR — DISBURSEMENT CONFIRMATION MESSAGE ----------
 const CLEAR_FIELD_IDS = ['cDoNumber','cCustomerName','cLoanAmt','cEmiAmt','cTenure','cAdvEmi','cDisbursed','cHoldAmt','cDealerAcc','cDealerIfsc'];
 
@@ -2446,6 +2470,13 @@ document.getElementById('clearCopyBtn').addEventListener('click', async () => {
 });
 
 renderClearMessage();
+removeNumberCommasFromPage();
+removeInputNumberCommas();
+const noCommaObserver = new MutationObserver(() => {
+  removeNumberCommasFromPage();
+  removeInputNumberCommas();
+});
+noCommaObserver.observe(document.body, {childList:true, subtree:true, characterData:true});
 
 function wireToggle(toggleId, panelId, showText, hideText){
   document.getElementById(toggleId).addEventListener('click', function(){
