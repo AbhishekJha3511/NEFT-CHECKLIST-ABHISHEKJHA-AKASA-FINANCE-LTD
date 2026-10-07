@@ -1718,7 +1718,9 @@ function populateAllFieldsFromRec(rec, statusEl){
 
   document.getElementById('cDoNumber').value = rec.do;
   document.getElementById('cCustomerName').value = rec.name;
-  if (rec.loan) document.getElementById('cLoanAmt').value = rec.loan;
+  if (rec.loan !== undefined && rec.loan !== null && rec.loan !== '') {
+    document.getElementById('cLoanAmt').value = normalizeMoneyValue(rec.loan);
+  }
   if (rec.emi) document.getElementById('cEmiAmt').value = rec.emi;
   if (rec.tenure) document.getElementById('cTenure').value = rec.tenure;
   if (rec.advEmi) document.getElementById('cAdvEmi').value = rec.advEmi;
@@ -1743,12 +1745,30 @@ function populateAllFieldsFromRec(rec, statusEl){
  * and Hold Amount — using real figures from the DO Sheet where available,
  * falling back to the standard example amounts otherwise.
  */
+function normalizeMoneyValue(value){
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value === 'number') return Number.isFinite(value) ? value : '';
+  const cleaned = String(value)
+    .replace(/[₹,\s]/g, '')
+    .replace(/[^0-9.-]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return '';
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : '';
+}
+
 function applyCalcAutofill(rec){
   const regTypeUpper = (rec.regType || '').toString().toUpperCase();
   let targetTab = null;
-  if (regTypeUpper.includes('UNREGISTER') || regTypeUpper.includes('NON')) targetTab = 'unregHighDp';
-  else if (regTypeUpper.includes('REGISTER')) targetTab = 'registered';
-  if (!targetTab) return;
+
+  if (regTypeUpper.includes('UNREGISTER') || regTypeUpper.includes('NON')) {
+    targetTab = 'unregHighDp';
+  } else if (regTypeUpper.includes('REGISTER')) {
+    targetTab = 'registered';
+  } else {
+    // If the sheet has no usable registration type, keep the user's
+    // current calculator tab instead of aborting the Loan Amount autofill.
+    targetTab = calcState || 'registered';
+  }
 
   calcState = targetTab;
   document.querySelectorAll('#calcTabs .subtab').forEach(t=>{
@@ -1758,23 +1778,33 @@ function applyCalcAutofill(rec){
 
   const setIfEditable = (fieldId, val) => {
     const el = document.getElementById('calc_' + fieldId);
-    if (el && !el.readOnly && val !== undefined && val !== '' && val !== null && !isNaN(Number(val))) {
-      el.value = val;
+    const numericVal = normalizeMoneyValue(val);
+    if (el && !el.readOnly && numericVal !== '') {
+      el.value = numericVal;
     }
   };
 
+  // Loan Amount is shared by every calculator mode and must always be
+  // loaded from the fetched DO Sheet record.
+  const loanAmount = normalizeMoneyValue(rec.loan);
+  if (loanAmount !== '') {
+    setIfEditable('loan', loanAmount);
+  }
+
   if (targetTab === 'registered'){
-    setIfEditable('loan', rec.loan || 85000);
     setIfEditable('filecharge', rec.fileCharge || 5900);
     setIfEditable('hold15k', 15000);
     const clearHold = document.getElementById('cHoldAmt');
     if (clearHold) clearHold.value = '15000';
   } else if (targetTab === 'unregHighDp'){
-    setIfEditable('loan', rec.loan || 95000);
     setIfEditable('filecharge', rec.fileCharge || 5900);
     setIfEditable('advemi', rec.advEmi);
     setIfEditable('interest', rec.advInterest || 0);
+  } else {
+    // Battery / Two-Wheeler use the same basic deductions.
+    setIfEditable('filecharge', rec.fileCharge || 5900);
   }
+
   computeCalc();
 }
 
@@ -2597,7 +2627,7 @@ function computeCalc(){
   const values = {};
   def.fields.forEach(f=>{
     const el = document.getElementById('calc_' + f.id);
-    values[f.id] = parseFloat(el.value) || 0;
+    values[f.id] = normalizeMoneyValue(el.value) || 0;
   });
   const result = Math.round(def.compute(values));
   document.getElementById('calcResult').innerHTML =
