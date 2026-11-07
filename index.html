@@ -986,8 +986,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       <div class="file-row"><span class="file-label">EMI Amount</span><span class="file-value" id="fpEmiAmt">—</span></div>
       <div class="file-row"><span class="file-label">Tenure</span><span class="file-value" id="fpTenure">—</span></div>
       <div class="file-row"><span class="file-label">Advance EMI</span><span class="file-value" id="fpAdvEmi">—</span></div>
-      <div class="file-row"><span class="file-label">Advance EMI Amount (BX)</span><span class="file-value" id="fpAdvEmiAmount">—</span></div>
-      <div class="file-row"><span class="file-label">Advance Interest Amount (BY)</span><span class="file-value" id="fpAdvInterest">—</span></div>
+      <div class="file-row"><span class="file-label">Advance EMI Amount (BY)</span><span class="file-value" id="fpAdvEmiAmount">—</span></div>
+      <div class="file-row"><span class="file-label">Advance Interest Amount (BZ)</span><span class="file-value" id="fpAdvInterest">—</span></div>
       <div class="file-row"><span class="file-label">File Charge</span><span class="file-value" id="fpFileCharge">—</span></div>
       <div class="file-row"><span class="file-label">Disbursement Amount</span><span class="file-value" id="fpDisbursed">— (not tracked in DO Sheet; use the calculator below)</span></div>
       <div class="file-row"><span class="file-label">Registered / Non-Registered</span><span class="file-value" id="fpRegType">—</span></div>
@@ -1478,10 +1478,10 @@ function colLetterToIndex(letter){
 // doesn't match exactly (e.g. on a live Google Sheet pull where headers can drift).
 const DO_SHEET_FIXED_COLS = {
   lead: 'A', do: 'E', area: 'F', name: 'I', surname: 'J',
-  mobile: 'R', dealer: 'BI', loan: 'BS', regType: 'BJ',
-  emi: 'BU', tenure: 'BV', advEmi: 'BW', advEmiAmount: 'BX',
-  saleExec: 'G', dealerCode: 'BH', vehiclePrice: 'BQ', downPayment: 'BR',
-  fileCharge: 'BT', advInterest: 'BY',
+  mobile: 'R', dealer: 'BI', loan: 'BT', regType: 'BJ',
+  emi: 'BV', tenure: 'BW', advEmi: 'BX', advEmiAmount: 'BY',
+  saleExec: 'G', dealerCode: 'BH', vehiclePrice: 'BR', downPayment: 'BS',
+  fileCharge: 'BU', advInterest: 'BZ',
   guarantorName: 'Z', guarantorSurname: 'AA', coName: 'AR', coSurname: 'AS'
 };
 
@@ -1800,7 +1800,7 @@ function applyCalcAutofill(rec){
     if (clearHold) clearHold.value = '15000';
   } else if (targetTab === 'unregHighDp'){
     setIfEditable('filecharge', rec.fileCharge || 5900);
-    setIfEditable('advemi', rec.advEmi);
+    setIfEditable('advemi', rec.advEmiAmount);
     setIfEditable('interest', rec.advInterest || 0);
   } else {
     // Battery / Two-Wheeler use the same basic deductions.
@@ -2572,12 +2572,12 @@ const calcDefs = {
     fields: [
       { id:'loan', label:'Loan Amount' },
       { id:'filecharge', label:'File Charge' },
-      { id:'advemi', label:'Advance EMI (BW)' },
-      { id:'interest', label:'Advance Interest Amount (BY)' },
+      { id:'advemi', label:'Advance EMI Amount (BY)' },
+      { id:'interest', label:'Advance Interest Amount (BZ)' },
       { id:'lifeins', label:'Life Insurance', fixed:600 }
     ],
     compute: v => v.loan - v.filecharge - v.advemi - v.interest - v.lifeins,
-    note: 'Loan Amount − File Charge − Advance EMI − Advance Interest Amount − Life Insurance (₹600) = Disbursement Amount'
+    note: 'Loan Amount − File Charge − Advance EMI Amount (BY) − Advance Interest Amount (BZ) − Life Insurance (₹600) = Disbursement Amount'
   },
   registered: {
     fields: [
